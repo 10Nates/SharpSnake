@@ -298,7 +298,7 @@ namespace Snek // Note: actual namespace depends on the project name.
             }
         }
 
-        private void GameLoop(object? o, ElapsedEventArgs e)
+        private void GameLoop(object o, ElapsedEventArgs e)
         {
             DateTime fpsCheck = DateTime.UtcNow;
             if (dead)
