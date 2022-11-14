@@ -263,11 +263,13 @@ namespace Snek // Note: actual namespace depends on the project name.
         private Bot activeBot;
 
         private List<ConsoleKey> inputQueue = new();
+        // private short[,] lastTiles = new short[Field.size, Field.size]; // Intended to improve IO performance but didn't change & caused a lot of visual issues
 
         private DateTime TimeStarted;
         private DateTime TimeDead;
 
         private System.Timers.Timer activeGameTicker;
+        private List<double> averageTickRate;
 
         public Game()
         {
@@ -275,6 +277,7 @@ namespace Snek // Note: actual namespace depends on the project name.
             activeSnake = new Snake(activeField);
             TimeStarted = DateTime.UtcNow;
             activeBot = new Bot(activeField, activeSnake, this);
+            averageTickRate = new List<double> { };
 
 
             Console.Clear();
@@ -394,7 +397,10 @@ namespace Snek // Note: actual namespace depends on the project name.
             activeGameTicker.Interval = 1000 / (targetStartingFPS + (0.5 * Math.Sqrt(activeSnake.size - 1))); // gradually speeds up as game progresses
 
             // display the field to the user
+
+            DateTime drawTimer = DateTime.UtcNow;
             short[,] tiles = activeField.GetTiles();
+            ConsoleColor currentFC = ConsoleColor.White; // reduce IO clutter since it's by far the biggest perfomance hitch
             for (int i = 0; i < Field.size; i++)
             {
                 for (int j = 0; j < Field.size; j++)
@@ -404,43 +410,63 @@ namespace Snek // Note: actual namespace depends on the project name.
                     switch (tile)
                     {
                         case 1: // empty
+                            //Console.ResetColor(); // Color doesn't need to be changed since it's an empty tile
                             Console.Write(' ');
                             break;
                         case 2: // food
+                            currentFC = ConsoleColor.Red; // Since this is not drawn repeatedly it would only hurt to have an if statement
                             Console.ForegroundColor = ConsoleColor.Red;
                             Console.Write('@');
                             break;
                         case 3:
                             goto case -1;
                         case -1: // snake
-                            Console.ForegroundColor = ConsoleColor.DarkGreen;
+                            if (currentFC != ConsoleColor.DarkGreen)
+                            {
+                                currentFC = ConsoleColor.DarkGreen;
+                                Console.ForegroundColor = ConsoleColor.DarkGreen;
+                            }
                             Console.Write('#');
                             break;
                         case -4: // snake head
+                            currentFC = ConsoleColor.Green; // Since this is not drawn repeatedly it would only hurt to have an if statement
                             Console.ForegroundColor = ConsoleColor.Green;
                             Console.Write('#');
                             break;
                         case -2: // barrier
-                            Console.ForegroundColor = ConsoleColor.Gray;
+                            if (currentFC != ConsoleColor.Gray)
+                            {
+                                currentFC = ConsoleColor.Gray;
+                                Console.ForegroundColor = ConsoleColor.Gray;
+                            }
                             Console.Write('*');
                             break;
                         case -3: // out of bounds
+                            currentFC = ConsoleColor.Yellow; // This shouldn't appear anyways
                             Console.ForegroundColor = ConsoleColor.Yellow;
                             Console.Write('*');
                             break;
                         default: // void and whatever else gets thrown in by a cosmic ray
                             throw new Exception("This should not happen - tile does not exist");
                     }
-                    Console.ResetColor();
+                    // Console.ResetColor(); // This takes up a comical amount of processing power
                 }
             }
+
+            Console.ResetColor();
 
             //Right of play area
             Console.SetCursorPosition(Field.size * 2 + 3, 2);
             Console.Write("Size: " + activeSnake.size);
             Console.SetCursorPosition(Field.size * 2 + 3, 3);
             TimeSpan currentTime = DateTime.UtcNow - TimeStarted;
-            Console.Write("Time: " + (int)(currentTime.TotalSeconds * 1000) / 1000.0);
+            Console.Write("Time (s): " + (int)(currentTime.TotalSeconds * 1000) / 1000.0);
+
+            //Average Tickrate handling
+            averageTickRate.Add((DateTime.UtcNow - fpsCheck).TotalMilliseconds);
+            if (averageTickRate.Count > 300) { averageTickRate.RemoveAt(0); } // Prevent memory leak
+
+            if (pathfind) AutomaticPlayStep(); // AI - very heavy workload
 
             // Displayed if you press tab
             if (debug)
@@ -451,16 +477,17 @@ namespace Snek // Note: actual namespace depends on the project name.
                 int[] currentFoodPos = activeField.GetFoodPos();
                 Console.Write("Apple Pos: ({0}, {1})", currentFoodPos[0], currentFoodPos[1]);
                 Console.SetCursorPosition(Field.size * 2 + 3, 7);
-                Console.Write("Target FT (ms): " + (int)(activeGameTicker.Interval));
+                Console.Write("Target FT (ms): " + (int)(activeGameTicker.Interval) + " ");
                 Console.SetCursorPosition(Field.size * 2 + 3, 8);
-                Console.Write("Real FT (ms): " + (DateTime.UtcNow - fpsCheck).Milliseconds);
+                Console.Write("Avg FT (ms): " + (int)(averageTickRate.Average() * 1000) / 1000.0 + " ");
+                Console.SetCursorPosition(Field.size * 2 + 3, 9);
+                Console.Write("Real FT (ms): " + (int)((DateTime.UtcNow - fpsCheck).TotalMilliseconds * 1000) / 1000.0 + " ");
             }
 
             // For input
             Console.SetCursorPosition(0, Field.size + 3);
 
-            if (pathfind) AutomaticPlayStep();
-            if (timewarp) activeGameTicker.Interval = 0.000001;
+            if (timewarp) activeGameTicker.Interval = 0.000001; // Tends to cause weird activity if not run last
         }
 
         private void InputCheck()
@@ -589,11 +616,50 @@ namespace Snek // Note: actual namespace depends on the project name.
                 }
             }*/
 
-            if (!foodFound) return inputQueue; // No path to food
+            if (!foodFound) // No path to food -> collision avoidance
+            {
+                ConsoleKey direction;
+                int[] curSPos = new int[2] { snakePos.x + 1, snakePos.y + 1 }; // current Position as snake
+
+                int[] candidateHosts = { pathMap[curSPos[0] + 1, curSPos[1]], pathMap[curSPos[0] - 1, curSPos[1]],
+                                         pathMap[curSPos[0], curSPos[1] + 1], pathMap[curSPos[0], curSPos[1] - 1] }; // adjacent tiles
+                int hostID = -1;
+                for (int k = 0; k < candidateHosts.Length; k++)
+                {
+                    if (candidateHosts[k] != -2)
+                    {
+                        hostID = k;
+                        break;
+                    }
+                }
+
+                switch (hostID)
+                {
+                    case 0:
+                        direction = ConsoleKey.D; // Directions are NOT reversed because it's from the perspective of the snake
+                        break;
+                    case 1:
+                        direction = ConsoleKey.A;
+                        break;
+                    case 2:
+                        direction = ConsoleKey.W;
+                        break;
+                    case 3:
+                        direction = ConsoleKey.S;
+                        break;
+                    default:
+                        //throw new Exception("Invalid HostID");
+                        direction = ConsoleKey.Execute; // Filler, do nothing
+                        break;
+                }
+
+                return new List<ConsoleKey>() { direction };
+            }
+
 
             // Backpropogate against distance map
             List<ConsoleKey> directions = new() { };
-            int[] curPos = new int[2] { foodPos[0] + 1, foodPos[1] + 1 }; // current Position
+            int[] curPos = new int[2] { foodPos[0] + 1, foodPos[1] + 1 }; // current Position as food
 
             for (int i = 0; i < pathMap[foodPos[0] + 1, foodPos[1] + 1]; i++) // for distance to head
             {
