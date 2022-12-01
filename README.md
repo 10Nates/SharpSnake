@@ -13,3 +13,7 @@ Comes with a rudimentary pathfinding algorithm designed by me.
 | L | Run as fast as possible |
 | K | Kill snake |
 | Esc / C | Close |
+
+## Running Outside of Visual Studio
+
+Requires mono if not on Windows. No special parameters required
