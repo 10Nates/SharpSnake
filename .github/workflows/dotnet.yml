@@ -29,8 +29,6 @@ jobs:
       run: dotnet build --configuration Release --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
-    - name: Release Drafter
-      uses: release-drafter/release-drafter@v5.21.1
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3.1.1
       with:
