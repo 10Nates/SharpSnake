@@ -12,7 +12,7 @@ on: # https://docs.github.com/en/actions/automating-builds-and-tests/building-an
 jobs:
   build:
 
-    runs-on: [ubuntu-latest, windows-latest]
+    runs-on: windows-latest
     strategy:
       matrix: 
         dotnet-version: ['7.0.x']
@@ -29,3 +29,10 @@ jobs:
       run: dotnet build --configuration Release --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
+    - name: Cache
+      uses: actions/cache@v3.0.11
+      with:
+        # A list of files, directories, and wildcard patterns to cache and restore
+        path: ~/bin
+        # An explicit key for restoring and saving the cache
+        key: ${{ runner.os }}-snek
