@@ -29,10 +29,12 @@ jobs:
       run: dotnet build --configuration Release --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
-    - name: Cache
-      uses: actions/cache@v3.0.11
+    - name: Release Drafter
+      uses: release-drafter/release-drafter@v5.21.1
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v3.1.1
       with:
-        # A list of files, directories, and wildcard patterns to cache and restore
-        path: bin/
-        # An explicit key for restoring and saving the cache
-        key: ${{ runner.os }}-snek
+        name: program
+        path: bin/Release/*
+        if-no-files-found: error
+        retention-days: 30
