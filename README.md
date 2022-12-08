@@ -1,4 +1,3 @@
-![HitCount](https://hits.dwyl.com/10Nates/SharpSnake.svg?style=flat-square)
 ![License](https://img.shields.io/github/license/10Nates/SharpSnake)
 ![Workflow Status](https://img.shields.io/github/workflow/status/10Nates/SharpSnake/.NET?label=build&style=flat-square)
 [![Forks](https://img.shields.io/github/forks/10Nates/SharpSnake.svg?style=social&label=Fork&maxAge=2592000)](https://GitHub.com/10Nates/SharpSnake/network/)
